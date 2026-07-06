@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>後台管理 — 鮮果市集</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="admin">
+    <a class="logo" href="/admin">⚙️ 鮮果市集後台</a>
+    <nav>
+      <a href="/">回前台</a>
+      <a href="javascript:logout()">登出</a>
+    </nav>
+  </header>
+
+  <!-- 登入遮罩 -->
+  <div id="loginOverlay" style="display:none; position:fixed; inset:0; background:rgba(38,50,56,0.93); z-index:50;
+       align-items:center; justify-content:center">
+    <div class="panel" style="width:340px; margin:0">
+      <div id="loginForm">
+        <h2>🔐 後台登入</h2>
+        <div class="form-group">
+          <label>帳號</label>
+          <input id="loginUsername" autocomplete="username" />
+        </div>
+        <div class="form-group">
+          <label>密碼</label>
+          <input type="password" id="loginPassword" autocomplete="current-password"
+                 onkeydown="if(event.key==='Enter')login()" />
+        </div>
+        <button style="width:100%" onclick="login()">登入</button>
+        <div id="loginError" style="color:var(--red); font-size:13px; margin-top:8px; display:none">帳號或密碼錯誤</div>
+        <div style="text-align:right; margin-top:10px">
+          <a href="javascript:showReset()" style="font-size:13px; color:var(--muted); text-decoration:underline">忘記密碼？</a>
+        </div>
+      </div>
+      <div id="resetForm" style="display:none">
+        <h2>🔑 重設密碼</h2>
+        <div class="form-group">
+          <label>帳號</label>
+          <input id="resetUsername" />
+        </div>
+        <div class="form-group">
+          <label>新密碼（至少 4 個字元）</label>
+          <input type="password" id="resetPassword" />
+        </div>
+        <div class="form-group">
+          <label>確認新密碼</label>
+          <input type="password" id="resetPassword2" onkeydown="if(event.key==='Enter')resetPassword()" />
+        </div>
+        <button style="width:100%" onclick="resetPassword()">重設並回到登入</button>
+        <div id="resetError" style="color:var(--red); font-size:13px; margin-top:8px; display:none"></div>
+        <div style="text-align:right; margin-top:10px">
+          <a href="javascript:showLogin()" style="font-size:13px; color:var(--muted); text-decoration:underline">回登入</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <main>
+    <div class="tabs">
+      <button id="tab-products" class="active" onclick="switchTab('products')">商品管理</button>
+      <button id="tab-categories" onclick="switchTab('categories')">分類管理</button>
+      <button id="tab-orders" onclick="switchTab('orders')">訂單管理<span class="dot" id="newOrderDot"></span></button>
+      <button id="tab-settings" onclick="switchTab('settings')">運費與設定</button>
+    </div>
+
+    <!-- ========== 商品管理 ========== -->
+    <section id="section-products">
+      <div class="panel">
+        <h2 id="formTitle">新增商品</h2>
+        <div style="display:flex; gap:18px; flex-wrap:wrap">
+          <div>
+            <div class="img-preview" id="imgPreview">🍎</div>
+            <input type="file" id="fImage" accept="image/*" style="margin-top:8px; font-size:12px; width:150px"
+                   onchange="onImagePick(this)" />
+            <button class="btn-sm btn-secondary" style="margin-top:6px" onclick="clearImage()">清除照片</button>
+          </div>
+          <div style="flex:1; min-width:280px">
+            <div style="display:grid; grid-template-columns:2fr 1fr; gap:12px">
+              <div class="form-group"><label>品名 *</label><input id="fName" /></div>
+              <div class="form-group"><label>Emoji（沒照片時顯示）</label><input id="fEmoji" placeholder="🍎" /></div>
+            </div>
+            <div class="form-group"><label>描述</label><textarea id="fDesc" rows="2"></textarea></div>
+            <div class="form-group">
+              <label>分類（可複選）</label>
+              <div id="fCategories" style="display:flex; gap:14px; flex-wrap:wrap; font-size:14px"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top:6px">
+          <label>規格與庫存 *（例如：一斤 / 一箱 / 一粒，各自定價與庫存）</label>
+          <div id="variantRows"></div>
+          <button class="btn-sm btn-outline" onclick="addVariantRow()">＋ 新增規格</button>
+        </div>
+
+        <div style="display:flex; gap:22px; flex-wrap:wrap; margin:10px 0 16px; font-size:14px">
+          <label><input type="checkbox" id="fPreorder" /> 售完可預購（庫存 0 仍可下單）</label>
+          <label>預購預計到貨日 <input type="date" id="fPreorderDate" style="width:auto; padding:4px 8px" /></label>
+          <label><input type="checkbox" id="fNoFree" /> 促銷品：不列入免運門檻</label>
+          <label><input type="checkbox" id="fActive" checked /> 上架</label>
+        </div>
+
+        <button onclick="saveProduct()">儲存商品</button>
+        <button class="btn-secondary" id="cancelEditBtn" style="display:none" onclick="resetForm()">取消編輯</button>
+      </div>
+
+      <div class="panel table-panel">
+        <table id="productTable">
+          <thead>
+            <tr><th>ID</th><th>商品</th><th>分類</th><th>規格 / 價格 / 庫存</th><th>標記</th><th>狀態</th><th>操作</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ========== 分類管理 ========== -->
+    <section id="section-categories" style="display:none">
+      <div class="panel">
+        <h2>新增分類</h2>
+        <div style="display:flex; gap:10px">
+          <input id="newCatName" placeholder="例如：當季盛產、免運組合…" style="max-width:300px" />
+          <button onclick="addCategory()">新增</button>
+        </div>
+      </div>
+      <div class="panel table-panel">
+        <table id="categoryTable">
+          <thead><tr><th>ID</th><th>名稱</th><th>商品數</th><th>操作</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ========== 訂單管理 ========== -->
+    <section id="section-orders" style="display:none">
+      <div class="panel" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center">
+        <select id="filterStatus" onchange="loadOrders()" style="max-width:140px">
+          <option value="">全部狀態</option>
+          <option value="pending">待出貨</option>
+          <option value="shipped">已出貨</option>
+          <option value="completed">已完成</option>
+          <option value="cancelled">已取消</option>
+        </select>
+        <select id="filterMethod" onchange="loadOrders()" style="max-width:140px">
+          <option value="">全部配送方式</option>
+          <option value="pickup">自取</option>
+          <option value="delivery">宅配</option>
+        </select>
+        <span style="flex:1"></span>
+        <button class="btn-sm btn-outline" onclick="exportCsv('pickup')">📋 匯出今日自取</button>
+        <button class="btn-sm btn-outline" onclick="exportCsv('delivery')">🚚 匯出今日宅配</button>
+        <button class="btn-sm btn-outline" onclick="exportCsv('')">📦 匯出全部訂單</button>
+      </div>
+      <div class="panel table-panel">
+        <table id="orderTable">
+          <thead>
+            <tr><th>單號</th><th>時間</th><th>配送</th><th>客戶</th><th>內容</th><th>金額</th><th>狀態</th><th>操作</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ========== 設定 ========== -->
+    <section id="section-settings" style="display:none">
+      <div class="panel" style="max-width:560px">
+        <h2>運費與商店設定</h2>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px">
+          <div class="form-group"><label>免運門檻（元）</label><input type="number" id="sThreshold" min="0" /></div>
+          <div class="form-group"><label>未達門檻運費（元）</label><input type="number" id="sFee" min="0" /></div>
+        </div>
+        <div class="form-group">
+          <label>自取時間區段（每行一個）</label>
+          <textarea id="sSlots" rows="4"></textarea>
+        </div>
+        <div class="form-group">
+          <label>匯款資訊（顯示於訂單成立頁）</label>
+          <textarea id="sBank" rows="5"></textarea>
+        </div>
+        <button onclick="saveSettings()">儲存設定</button>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const STATUS_LABEL = { pending: '待出貨', shipped: '已出貨', completed: '已完成', cancelled: '已取消' };
+    let data = { products: [], categories: [], settings: {} };
+    let editingId = null;
+    let imageData = '';
+
+    function switchTab(tab) {
+      ['products', 'categories', 'orders', 'settings'].forEach((t) => {
+        document.getElementById('tab-' + t).classList.toggle('active', t === tab);
+        document.getElementById('section-' + t).style.display = t === tab ? '' : 'none';
+      });
+      if (tab === 'orders') {
+        document.getElementById('newOrderDot').style.display = 'none';
+        loadOrders();
+      }
+      if (tab === 'settings') fillSettings();
+    }
+
+    async function loadData() {
+      const res = await fetch('/api/admin/data');
+      if (res.status === 401) {
+        document.getElementById('loginOverlay').style.display = 'flex';
+        document.getElementById('loginPassword').focus();
+        return;
+      }
+      document.getElementById('loginOverlay').style.display = 'none';
+      data = await res.json();
+      renderCategoryChecks();
+      renderProductTable();
+      renderCategoryTable();
+    }
+
+    async function login() {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: document.getElementById('loginUsername').value.trim(),
+          password: document.getElementById('loginPassword').value,
+        }),
+      });
+      if (!res.ok) {
+        document.getElementById('loginError').style.display = '';
+        return;
+      }
+      document.getElementById('loginError').style.display = 'none';
+      document.getElementById('loginPassword').value = '';
+      loadData();
+    }
+
+    function showReset() {
+      document.getElementById('loginForm').style.display = 'none';
+      document.getElementById('resetForm').style.display = '';
+      document.getElementById('resetUsername').focus();
+    }
+
+    function showLogin() {
+      document.getElementById('resetForm').style.display = 'none';
+      document.getElementById('loginForm').style.display = '';
+    }
+
+    async function resetPassword() {
+      const errEl = document.getElementById('resetError');
+      const pw1 = document.getElementById('resetPassword').value;
+      const pw2 = document.getElementById('resetPassword2').value;
+      if (pw1 !== pw2) {
+        errEl.textContent = '兩次輸入的密碼不一致';
+        errEl.style.display = '';
+        return;
+      }
+      const res = await fetch('/api/admin/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: document.getElementById('resetUsername').value.trim(),
+          newPassword: pw1,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        errEl.textContent = result.error || '重設失敗';
+        errEl.style.display = '';
+        return;
+      }
+      errEl.style.display = 'none';
+      ['resetUsername', 'resetPassword', 'resetPassword2'].forEach((id) => (document.getElementById(id).value = ''));
+      showLogin();
+      showToast('密碼已重設，請用新密碼登入');
+    }
+
+    async function logout() {
+      await fetch('/api/admin/logout', { method: 'POST' });
+      location.reload();
+    }
+
+    // ---------- 商品 ----------
+
+    function renderCategoryChecks(checkedIds = []) {
+      document.getElementById('fCategories').innerHTML = data.categories.map((c) =>
+        `<label><input type="checkbox" class="cat-check" value="${c.id}"
+          ${checkedIds.includes(c.id) ? 'checked' : ''} /> ${c.name}</label>`
+      ).join('') || '<span style="color:var(--muted)">尚無分類，請先到「分類管理」新增</span>';
+    }
+
+    function addVariantRow(v = { unit: '', price: '', stock: 0 }) {
+      const div = document.createElement('div');
+      div.className = 'variant-row';
+      div.innerHTML = `
+        <input placeholder="單位（一斤 / 一箱 / 一粒）" class="v-unit" value="${v.unit}" />
+        <input type="number" placeholder="價格" class="v-price" min="0" value="${v.price}" />
+        <input type="number" placeholder="庫存" class="v-stock" min="0" value="${v.stock}" />
+        <button class="btn-danger btn-sm" onclick="this.parentElement.remove()">刪</button>
+      `;
+      document.getElementById('variantRows').appendChild(div);
+    }
+
+    function collectVariants() {
+      return [...document.querySelectorAll('.variant-row')]
+        .map((row) => ({
+          unit: row.querySelector('.v-unit').value.trim(),
+          price: row.querySelector('.v-price').value,
+          stock: row.querySelector('.v-stock').value,
+        }))
+        .filter((v) => v.unit && v.price !== '');
+    }
+
+    function onImagePick(input) {
+      const file = input.files[0];
+      if (!file) return;
+      if (file.size > 3 * 1024 * 1024) { showToast('圖片請小於 3MB'); input.value = ''; return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        imageData = reader.result;
+        document.getElementById('imgPreview').innerHTML = `<img src="${imageData}">`;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function clearImage() {
+      imageData = '';
+      document.getElementById('fImage').value = '';
+      document.getElementById('imgPreview').innerHTML = document.getElementById('fEmoji').value || '🍎';
+    }
+
+    function renderProductTable() {
+      const tbody = document.querySelector('#productTable tbody');
+      tbody.innerHTML = data.products.map((p) => `
+        <tr>
+          <td>${p.id}</td>
+          <td>${p.image ? `<img src="${p.image}" style="width:36px;height:36px;border-radius:8px;object-fit:cover;vertical-align:middle">` : p.emoji} ${p.name}</td>
+          <td>${p.categoryIds.map((id) => (data.categories.find((c) => c.id === id) || {}).name).filter(Boolean).join('、') || '—'}</td>
+          <td>${p.variants.map((v) =>
+            `${v.unit}：NT$${v.price}（庫存 <b style="${v.stock === 0 ? 'color:var(--red)' : ''}">${v.stock}</b>）`
+          ).join('<br>')}</td>
+          <td>
+            ${p.allowPreorder ? `<span class="tag tag-pending">可預購${p.preorderDate ? '｜' + p.preorderDate + ' 到貨' : ''}</span>` : ''}
+            ${p.excludeFreeShipping ? '<span class="tag tag-pickup">不計免運</span>' : ''}
+          </td>
+          <td><span class="tag ${p.active ? 'tag-completed' : 'tag-off'}">${p.active ? '上架中' : '已下架'}</span></td>
+          <td style="white-space:nowrap">
+            <button class="btn-sm" onclick="editProduct(${p.id})">編輯</button>
+            <button class="btn-danger btn-sm" onclick="deleteProduct(${p.id}, '${p.name}')">刪除</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function editProduct(id) {
+      const p = data.products.find((x) => x.id === id);
+      if (!p) return;
+      editingId = id;
+      document.getElementById('formTitle').textContent = `編輯商品 #${id}｜${p.name}`;
+      document.getElementById('fName').value = p.name;
+      document.getElementById('fEmoji').value = p.emoji;
+      document.getElementById('fDesc').value = p.description;
+      document.getElementById('fPreorder').checked = p.allowPreorder;
+      document.getElementById('fPreorderDate').value = p.preorderDate || '';
+      document.getElementById('fNoFree').checked = p.excludeFreeShipping;
+      document.getElementById('fActive').checked = p.active;
+      imageData = p.image || '';
+      document.getElementById('imgPreview').innerHTML = imageData ? `<img src="${imageData}">` : (p.emoji || '🍎');
+      renderCategoryChecks(p.categoryIds);
+      document.getElementById('variantRows').innerHTML = '';
+      p.variants.forEach((v) => addVariantRow(v));
+      document.getElementById('cancelEditBtn').style.display = '';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function resetForm() {
+      editingId = null;
+      imageData = '';
+      document.getElementById('formTitle').textContent = '新增商品';
+      ['fName', 'fEmoji', 'fDesc', 'fImage'].forEach((id) => (document.getElementById(id).value = ''));
+      document.getElementById('fPreorder').checked = false;
+      document.getElementById('fPreorderDate').value = '';
+      document.getElementById('fNoFree').checked = false;
+      document.getElementById('fActive').checked = true;
+      document.getElementById('imgPreview').innerHTML = '🍎';
+      renderCategoryChecks();
+      document.getElementById('variantRows').innerHTML = '';
+      addVariantRow();
+      document.getElementById('cancelEditBtn').style.display = 'none';
+    }
+
+    async function saveProduct() {
+      const body = {
+        name: document.getElementById('fName').value.trim(),
+        emoji: document.getElementById('fEmoji').value.trim(),
+        image: imageData,
+        description: document.getElementById('fDesc').value.trim(),
+        categoryIds: [...document.querySelectorAll('.cat-check:checked')].map((c) => Number(c.value)),
+        variants: collectVariants(),
+        allowPreorder: document.getElementById('fPreorder').checked,
+        preorderDate: document.getElementById('fPreorderDate').value,
+        excludeFreeShipping: document.getElementById('fNoFree').checked,
+        active: document.getElementById('fActive').checked,
+      };
+      if (!body.name || body.variants.length === 0) {
+        showToast('品名為必填，且至少要有一個規格（單位＋價格）');
+        return;
+      }
+      const url = editingId ? `/api/admin/products/${editingId}` : '/api/admin/products';
+      const res = await fetch(url, {
+        method: editingId ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const result = await res.json();
+      if (!res.ok) { showToast(result.error || '儲存失敗'); return; }
+      showToast(editingId ? '商品已更新' : '商品已新增');
+      resetForm();
+      loadData();
+    }
+
+    async function deleteProduct(id, name) {
+      if (!confirm(`確定要刪除「${name}」嗎？`)) return;
+      const res = await fetch(`/api/admin/products/${id}`, { method: 'DELETE' });
+      if (!res.ok) { showToast('刪除失敗'); return; }
+      showToast('商品已刪除');
+      if (editingId === id) resetForm();
+      loadData();
+    }
+
+    // ---------- 分類 ----------
+
+    function renderCategoryTable() {
+      const tbody = document.querySelector('#categoryTable tbody');
+      tbody.innerHTML = data.categories.map((c) => `
+        <tr>
+          <td>${c.id}</td>
+          <td>${c.name}</td>
+          <td>${data.products.filter((p) => p.categoryIds.includes(c.id)).length}</td>
+          <td>
+            <button class="btn-sm" onclick="renameCategory(${c.id}, '${c.name}')">改名</button>
+            <button class="btn-danger btn-sm" onclick="deleteCategory(${c.id}, '${c.name}')">刪除</button>
+          </td>
+        </tr>
+      `).join('') || '<tr><td colspan="4" class="empty">尚無分類</td></tr>';
+    }
+
+    async function addCategory() {
+      const name = document.getElementById('newCatName').value.trim();
+      if (!name) return;
+      await fetch('/api/admin/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      document.getElementById('newCatName').value = '';
+      showToast('分類已新增');
+      loadData();
+    }
+
+    async function renameCategory(id, oldName) {
+      const name = prompt('分類名稱：', oldName);
+      if (!name || name === oldName) return;
+      await fetch(`/api/admin/categories/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      loadData();
+    }
+
+    async function deleteCategory(id, name) {
+      if (!confirm(`確定刪除分類「${name}」？（商品不會被刪除，只會移出此分類）`)) return;
+      await fetch(`/api/admin/categories/${id}`, { method: 'DELETE' });
+      loadData();
+    }
+
+    // ---------- 訂單 ----------
+
+    async function loadOrders() {
+      const params = new URLSearchParams();
+      const status = document.getElementById('filterStatus').value;
+      const method = document.getElementById('filterMethod').value;
+      if (status) params.set('status', status);
+      if (method) params.set('method', method);
+
+      const res = await fetch('/api/admin/orders?' + params);
+      const orders = await res.json();
+      const tbody = document.querySelector('#orderTable tbody');
+      if (orders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="empty">沒有符合條件的訂單</td></tr>';
+        return;
+      }
+      tbody.innerHTML = orders.map((o) => `
+        <tr>
+          <td><b>${o.orderNo}</b></td>
+          <td style="white-space:nowrap">${new Date(o.createdAt).toLocaleString('zh-TW', { hour12: false })}</td>
+          <td>
+            ${o.delivery.method === 'pickup'
+              ? `<span class="tag tag-pickup">自取</span><br><small>${o.delivery.pickupDate}<br>${o.delivery.pickupTime}</small>`
+              : `<span class="tag tag-delivery">宅配</span><br><small>${o.delivery.address}</small>`}
+          </td>
+          <td>${o.customer.name}<br><small style="color:var(--muted)">${o.customer.phone}</small></td>
+          <td>
+            ${o.items.map((i) => `${i.name}（${i.unit}）×${i.qty}${i.preorder ? ' <span class="badge badge-preorder">預購</span>' : ''}`).join('<br>')}
+            ${o.note ? `<br><small style="color:var(--orange)">📝 ${o.note}</small>` : ''}
+          </td>
+          <td style="white-space:nowrap">NT$ ${o.total}${o.shippingFee ? `<br><small style="color:var(--muted)">含運 ${o.shippingFee}</small>` : ''}</td>
+          <td><span class="tag tag-${o.status}">${STATUS_LABEL[o.status]}</span></td>
+          <td>
+            <select onchange="updateOrderStatus(${o.id}, this.value)">
+              ${Object.entries(STATUS_LABEL).map(([v, l]) =>
+                `<option value="${v}" ${v === o.status ? 'selected' : ''}>${l}</option>`).join('')}
+            </select>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function updateOrderStatus(id, status) {
+      const res = await fetch(`/api/admin/orders/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      showToast(res.ok ? `已更新為「${STATUS_LABEL[status]}」` : '更新失敗');
+      loadOrders();
+    }
+
+    function exportCsv(method) {
+      const params = new URLSearchParams();
+      if (method) {
+        params.set('method', method);
+        params.set('date', new Date().toISOString().slice(0, 10));
+      }
+      location.href = '/api/admin/orders/export?' + params;
+    }
+
+    // ---------- 新訂單輪詢提醒 ----------
+
+    let knownLatestId = null;
+    async function pollNewOrders() {
+      try {
+        const res = await fetch('/api/admin/orders/latest-id');
+        if (!res.ok) return; // 未登入時不提醒
+        const { latestId } = await res.json();
+        if (knownLatestId !== null && latestId > knownLatestId) {
+          showToast('🔔 有新訂單進來了！');
+          beep();
+          document.getElementById('newOrderDot').style.display = 'inline';
+          document.getElementById('newOrderDot').textContent = '新';
+          if (document.getElementById('section-orders').style.display !== 'none') loadOrders();
+        }
+        knownLatestId = latestId;
+      } catch {}
+    }
+    setInterval(pollNewOrders, 15000);
+    pollNewOrders();
+
+    function beep() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+        osc.start(); osc.stop(ctx.currentTime + 0.5);
+      } catch {}
+    }
+
+    // ---------- 設定 ----------
+
+    function fillSettings() {
+      document.getElementById('sThreshold').value = data.settings.freeShippingThreshold;
+      document.getElementById('sFee').value = data.settings.shippingFee;
+      document.getElementById('sSlots').value = (data.settings.pickupTimeSlots || []).join('\n');
+      document.getElementById('sBank').value = data.settings.bankInfo || '';
+    }
+
+    async function saveSettings() {
+      const res = await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          freeShippingThreshold: document.getElementById('sThreshold').value,
+          shippingFee: document.getElementById('sFee').value,
+          pickupTimeSlots: document.getElementById('sSlots').value.split('\n').map((s) => s.trim()).filter(Boolean),
+          bankInfo: document.getElementById('sBank').value,
+        }),
+      });
+      data.settings = await res.json();
+      showToast('設定已儲存');
+    }
+
+    let toastTimer;
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
+    }
+
+    addVariantRow();
+    loadData();
+  </script>
+</body>
+</html>

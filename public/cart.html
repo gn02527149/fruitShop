@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>購物車 — 鮮果市集</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header>
+    <a class="logo" href="/">🍉 鮮果市集</a>
+    <nav>
+      <a href="/">商品</a>
+      <a href="/cart.html">🛒 購物車 <span class="cart-badge" id="cartCount">0</span></a>
+    </nav>
+  </header>
+
+  <main>
+    <h1 class="page-title">🛒 購物車</h1>
+
+    <div class="panel" id="cartPanel">
+      <div class="empty">載入中…</div>
+    </div>
+
+    <div class="panel" id="checkoutPanel" style="display:none">
+      <h2>配送方式</h2>
+      <div class="method-picker" id="methodPicker">
+        <label id="labelPickup" class="selected">
+          <input type="radio" name="method" value="pickup" checked onchange="onMethodChange()" />
+          🏪 到店自取
+        </label>
+        <label id="labelDelivery">
+          <input type="radio" name="method" value="delivery" onchange="onMethodChange()" />
+          🚚 宅配 / 當日快遞
+        </label>
+      </div>
+
+      <div id="freeShippingHint" class="free-shipping-hint" style="display:none"></div>
+      <div id="preorderHint" class="free-shipping-hint" style="display:none"></div>
+
+      <div id="pickupFields">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px">
+          <div class="form-group">
+            <label>預計自取日期</label>
+            <input type="date" id="pickupDate" />
+          </div>
+          <div class="form-group">
+            <label>時間區段</label>
+            <select id="pickupTime"></select>
+          </div>
+        </div>
+      </div>
+
+      <div id="deliveryFields" style="display:none">
+        <div class="form-group">
+          <label>收件地址</label>
+          <input id="custAddress" placeholder="縣市、區、路名與門牌" />
+        </div>
+      </div>
+
+      <h2 style="margin-top:10px">聯絡資訊</h2>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px">
+        <div class="form-group">
+          <label>姓名</label>
+          <input id="custName" placeholder="王小明" />
+        </div>
+        <div class="form-group">
+          <label>電話</label>
+          <input id="custPhone" placeholder="0912-345-678" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>備註（選填）</label>
+        <textarea id="orderNote" rows="2" placeholder="例如：匯款帳號後五碼、水果熟度偏好…"></textarea>
+      </div>
+
+      <h2 style="margin-top:10px">付款方式</h2>
+      <div style="font-size:14px; color:#5d665f">
+        目前提供 <b>匯款轉帳</b>，帳號如下。可先完成匯款並將「帳號後五碼」填入上方備註，或下單後再告知。
+      </div>
+      <div class="bank-box" id="bankBoxPre" style="margin-bottom:14px"></div>
+
+      <div id="summaryBox"></div>
+      <button id="checkoutBtn" style="width:100%; margin-top:14px; padding:13px" onclick="checkout()">
+        送出訂單
+      </button>
+    </div>
+
+    <div class="panel" id="donePanel" style="display:none">
+      <div style="text-align:center; padding:16px 0">
+        <div style="font-size:44px">✅</div>
+        <h2 style="margin:10px 0 4px">訂單成立！</h2>
+        <div style="font-size:15px">
+          訂單編號 <b id="doneOrderNo" style="color:var(--red)"></b>，金額 <b id="doneTotal"></b>
+        </div>
+        <div style="font-size:13px; color:var(--muted); margin-top:4px">
+          請記下單號，方便後續查詢與對帳
+        </div>
+      </div>
+      <div class="bank-box" id="bankBox"></div>
+      <div style="text-align:center; margin-top:16px">
+        <a class="btn" href="/">繼續購物</a>
+      </div>
+    </div>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="/cart.js"></script>
+  <script>
+    let shop = { products: [], settings: {} };
+
+    function findVariant(productId, unit) {
+      const p = shop.products.find((x) => x.id === productId);
+      if (!p) return null;
+      const v = p.variants.find((x) => x.unit === unit);
+      return v ? { product: p, variant: v } : null;
+    }
+
+    function cartLines() {
+      return Cart.get()
+        .map((i) => ({ ...i, ...(findVariant(i.productId, i.unit) || {}) }))
+        .filter((i) => i.product && i.variant);
+    }
+
+    async function load() {
+      const res = await fetch('/api/shop');
+      shop = await res.json();
+
+      // 自取時間區段、日期最小值
+      const timeSelect = document.getElementById('pickupTime');
+      timeSelect.innerHTML = (shop.settings.pickupTimeSlots || [])
+        .map((t) => `<option>${t}</option>`).join('');
+      const today = new Date().toISOString().slice(0, 10);
+      const pickupDate = document.getElementById('pickupDate');
+      pickupDate.min = today;
+      pickupDate.value = today;
+
+      document.getElementById('bankBoxPre').textContent = shop.settings.bankInfo || '';
+
+      render();
+    }
+
+    function render() {
+      const lines = cartLines();
+      const panel = document.getElementById('cartPanel');
+      const checkoutPanel = document.getElementById('checkoutPanel');
+
+      if (lines.length === 0) {
+        panel.innerHTML = '<div class="empty">購物車是空的，去逛逛吧 🍊</div>';
+        checkoutPanel.style.display = 'none';
+        updateCartBadge();
+        return;
+      }
+
+      panel.innerHTML = `
+        <table>
+          <thead>
+            <tr><th>商品</th><th>單價</th><th>數量</th><th>小計</th><th></th></tr>
+          </thead>
+          <tbody>
+            ${lines.map((l) => `
+              <tr>
+                <td>
+                  ${l.product.emoji} ${l.product.name}<br>
+                  <small style="color:var(--muted)">${l.unit}</small>
+                  ${l.variant.stock === 0 && l.product.allowPreorder ? '<span class="badge badge-preorder">預購</span>' : ''}
+                  ${l.product.excludeFreeShipping ? '<span class="badge badge-nofree">不計免運</span>' : ''}
+                </td>
+                <td>NT$ ${l.variant.price}</td>
+                <td>
+                  <span class="qty-control">
+                    <button onclick="changeQty(${l.productId}, '${l.unit}', ${l.qty - 1})">−</button>
+                    ${l.qty}
+                    <button onclick="changeQty(${l.productId}, '${l.unit}', ${l.qty + 1})">＋</button>
+                  </span>
+                </td>
+                <td>NT$ ${l.variant.price * l.qty}</td>
+                <td><button class="btn-danger btn-sm" onclick="removeItem(${l.productId}, '${l.unit}')">移除</button></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+      checkoutPanel.style.display = '';
+      updateCartBadge();
+      renderSummary();
+      applyPreorderConstraint();
+    }
+
+    function currentMethod() {
+      return document.querySelector('input[name="method"]:checked').value;
+    }
+
+    // 購物車內預購商品最晚的預計到貨日（'' 表示沒有預購商品）
+    function latestPreorderDate() {
+      return cartLines()
+        .filter((l) => l.qty > l.variant.stock && l.product.allowPreorder)
+        .reduce((max, l) => ((l.product.preorderDate || '') > max ? l.product.preorderDate : max), '');
+    }
+
+    function applyPreorderConstraint() {
+      const hint = document.getElementById('preorderHint');
+      const pickupDate = document.getElementById('pickupDate');
+      const today = new Date().toISOString().slice(0, 10);
+      const hasPreorder = cartLines().some((l) => l.qty > l.variant.stock && l.product.allowPreorder);
+      const arriveDate = latestPreorderDate();
+
+      if (!hasPreorder) {
+        hint.style.display = 'none';
+        pickupDate.min = today;
+        return;
+      }
+
+      if (currentMethod() === 'pickup') {
+        const minDate = arriveDate > today ? arriveDate : today;
+        pickupDate.min = minDate;
+        if (pickupDate.value < minDate) pickupDate.value = minDate;
+        hint.className = 'free-shipping-hint';
+        hint.textContent = arriveDate
+          ? `📦 訂單含預購商品，預計 ${arriveDate} 到貨，最快自取日為當天`
+          : '📦 訂單含預購商品，到貨時間待定，門市到貨後會另行通知取貨';
+      } else {
+        hint.className = 'free-shipping-hint';
+        hint.textContent = arriveDate
+          ? `📦 訂單含預購商品，預計 ${arriveDate} 到貨後安排出貨`
+          : '📦 訂單含預購商品，到貨後依序安排出貨';
+      }
+      hint.style.display = '';
+    }
+
+    function onMethodChange() {
+      const method = currentMethod();
+      document.getElementById('labelPickup').classList.toggle('selected', method === 'pickup');
+      document.getElementById('labelDelivery').classList.toggle('selected', method === 'delivery');
+      document.getElementById('pickupFields').style.display = method === 'pickup' ? '' : 'none';
+      document.getElementById('deliveryFields').style.display = method === 'delivery' ? '' : 'none';
+      renderSummary();
+      applyPreorderConstraint();
+    }
+
+    function renderSummary() {
+      const lines = cartLines();
+      const method = currentMethod();
+      const threshold = shop.settings.freeShippingThreshold;
+
+      const subtotal = lines.reduce((s, l) => s + l.variant.price * l.qty, 0);
+      // 免運門檻只計入非促銷商品
+      const eligible = lines.reduce(
+        (s, l) => s + (l.product.excludeFreeShipping ? 0 : l.variant.price * l.qty), 0);
+
+      let shippingFee = 0;
+      if (method === 'delivery') {
+        shippingFee = eligible >= threshold ? 0 : shop.settings.shippingFee;
+      }
+
+      // 免運提示
+      const hint = document.getElementById('freeShippingHint');
+      if (method === 'delivery') {
+        hint.style.display = '';
+        if (eligible >= threshold) {
+          hint.className = 'free-shipping-hint ok';
+          hint.textContent = `🎉 已達 NT$ ${threshold} 免運門檻，本單免運費！`;
+        } else {
+          hint.className = 'free-shipping-hint';
+          hint.textContent = `滿 NT$ ${threshold} 免運，還差 NT$ ${threshold - eligible}（特價促銷品不列入計算）`;
+        }
+      } else {
+        hint.style.display = 'none';
+      }
+
+      document.getElementById('summaryBox').innerHTML = `
+        <div class="summary-row"><span>商品小計</span><span>NT$ ${subtotal}</span></div>
+        <div class="summary-row"><span>運費</span><span>${
+          method === 'pickup' ? '自取免運' : shippingFee === 0 ? '免運費' : 'NT$ ' + shippingFee
+        }</span></div>
+        <div class="summary-row total"><span>合計</span><span>NT$ ${subtotal + shippingFee}</span></div>
+      `;
+    }
+
+    function changeQty(productId, unit, qty) {
+      const found = findVariant(productId, unit);
+      if (found && qty > found.variant.stock && !found.product.allowPreorder) {
+        showToast(`「${found.product.name}（${unit}）」庫存只剩 ${found.variant.stock}`);
+        return;
+      }
+      Cart.setQty(productId, unit, qty);
+      render();
+    }
+
+    function removeItem(productId, unit) {
+      Cart.remove(productId, unit);
+      render();
+    }
+
+    async function checkout() {
+      const method = currentMethod();
+      const customer = {
+        name: document.getElementById('custName').value.trim(),
+        phone: document.getElementById('custPhone').value.trim(),
+      };
+      if (!customer.name || !customer.phone) {
+        showToast('請填寫姓名與電話');
+        return;
+      }
+
+      const delivery = { method };
+      if (method === 'pickup') {
+        delivery.pickupDate = document.getElementById('pickupDate').value;
+        delivery.pickupTime = document.getElementById('pickupTime').value;
+        if (!delivery.pickupDate) { showToast('請選擇自取日期'); return; }
+      } else {
+        delivery.address = document.getElementById('custAddress').value.trim();
+        if (!delivery.address) { showToast('請填寫收件地址'); return; }
+      }
+
+      const btn = document.getElementById('checkoutBtn');
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customer,
+            delivery,
+            note: document.getElementById('orderNote').value.trim(),
+            items: Cart.get(),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showToast(data.error || '訂單送出失敗');
+          return;
+        }
+        Cart.clear();
+        document.getElementById('cartPanel').style.display = 'none';
+        document.getElementById('checkoutPanel').style.display = 'none';
+        document.getElementById('donePanel').style.display = '';
+        document.getElementById('doneOrderNo').textContent = data.orderNo;
+        document.getElementById('doneTotal').textContent = 'NT$ ' + data.total;
+        document.getElementById('bankBox').textContent = data.bankInfo || '';
+        updateCartBadge();
+        window.scrollTo({ top: 0 });
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    let toastTimer;
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 1800);
+    }
+
+    load();
+  </script>
+</body>
+</html>
