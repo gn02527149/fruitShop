@@ -42,13 +42,16 @@ header.admin { background: linear-gradient(135deg, #37474f, #546e7a); box-shadow
 header .logo { font-size: 20px; font-weight: 800; letter-spacing: 1px; }
 
 header nav { display: flex; align-items: center; gap: 4px; }
-header nav a {
+header nav a, header nav button.link {
   font-size: 15px;
   padding: 6px 14px;
   border-radius: 20px;
   transition: background 0.2s;
+  background: none;
+  color: inherit;
+  font-weight: 400;
 }
-header nav a:hover { background: rgba(255, 255, 255, 0.18); }
+header nav a:hover, header nav button.link:hover { background: rgba(255, 255, 255, 0.18); filter: none; }
 
 .cart-badge {
   background: var(--orange);
@@ -238,8 +241,38 @@ input[type="checkbox"], input[type="radio"] { width: auto; }
   border-radius: 10px;
   font-size: 11px;
   padding: 0 6px;
-  display: none;
 }
+
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(38, 50, 56, 0.93);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.muted-link {
+  font-size: 13px;
+  color: var(--muted);
+  text-decoration: underline;
+  background: none;
+  padding: 0;
+  font-weight: 400;
+}
+.muted-link:hover { filter: none; }
+
+.form-error {
+  color: var(--red);
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+.inline-form { display: flex; gap: 10px; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.flex-gap { display: flex; gap: 18px; flex-wrap: wrap; }
+.toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 
 /* ---------- 免運提示 ---------- */
 .free-shipping-hint {
@@ -322,4 +355,5 @@ input[type="checkbox"], input[type="radio"] { width: auto; }
 @media (max-width: 640px) {
   .variant-row { grid-template-columns: 1fr 1fr; }
   .method-picker { flex-direction: column; }
+  .two-col { grid-template-columns: 1fr; }
 }

@@ -8,7 +8,6 @@ const DB_PATH = path.join(__dirname, 'data', 'db.json');
 
 // 商品圖片以 base64 存進 db.json，放寬 body 大小限制
 app.use(express.json({ limit: '8mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
 
 // ---------- 後台登入保護 ----------
 // 帳號密碼存在 db.json（預設 admin / admin），可透過「忘記密碼」直接重設
@@ -389,13 +388,28 @@ app.get('/api/admin/orders/export', (req, res) => {
   res.send(csv);
 });
 
-// 後台頁面
-app.get('/admin', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
-});
+// 舊版靜態頁網址導向 Vue Router
+app.get('/cart.html', (req, res) => res.redirect('/cart'));
+app.get('/admin.html', (req, res) => res.redirect('/admin'));
+
+// 正式環境：由 Express 提供 Vue 打包後的 SPA
+const DIST_PATH = path.join(__dirname, 'dist');
+const isProd = process.env.NODE_ENV === 'production';
+
+if (isProd) {
+  app.use(express.static(DIST_PATH));
+  app.get(/^(?!\/api).*/, (req, res) => {
+    res.sendFile(path.join(DIST_PATH, 'index.html'));
+  });
+}
 
 app.listen(PORT, () => {
   console.log(`🍉 水果商城已啟動`);
-  console.log(`   前台  http://localhost:${PORT}`);
-  console.log(`   後台  http://localhost:${PORT}/admin`);
+  if (isProd) {
+    console.log(`   前台  http://localhost:${PORT}`);
+    console.log(`   後台  http://localhost:${PORT}/admin`);
+  } else {
+    console.log(`   API   http://localhost:${PORT}`);
+    console.log(`   前台請用 Vite（npm run dev）→ http://localhost:5173`);
+  }
 });
