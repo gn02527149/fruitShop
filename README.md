@@ -36,6 +36,17 @@ npm start          # http://localhost:3000
 
 後台預設帳密：`admin` / `admin`。
 
+## 部署到 Render
+
+Vue 前端要先打包成 `dist/`，Render 才找得到頁面。Settings 建議設成：
+
+| 項目 | 值 |
+| --- | --- |
+| Build Command | `npm install && npm run build` |
+| Start Command | `npm start` |
+
+改完後重新 Deploy。若 Build Command 維持預設的 `npm install`，專案也會在 Render 環境自動執行 `vite build`。
+
 ## API
 
 | Method | 路徑 | 說明 |

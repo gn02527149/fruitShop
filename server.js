@@ -397,9 +397,16 @@ const DIST_PATH = path.join(__dirname, 'dist');
 const isProd = process.env.NODE_ENV === 'production';
 
 if (isProd) {
+  const indexFile = path.join(DIST_PATH, 'index.html');
+  if (!fs.existsSync(indexFile)) {
+    console.error('找不到打包後的前端。請先執行 npm run build，或在 Render 把 Build Command 設成：npm install && npm run build');
+  }
   app.use(express.static(DIST_PATH));
   app.get(/^(?!\/api).*/, (req, res) => {
-    res.sendFile(path.join(DIST_PATH, 'index.html'));
+    if (!fs.existsSync(indexFile)) {
+      return res.status(500).send('前端尚未打包，請確認 Render Build Command 有執行 npm run build');
+    }
+    res.sendFile(indexFile);
   });
 }
 

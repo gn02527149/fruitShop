@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: fruitShop
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
