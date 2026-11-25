@@ -1,5 +1,5 @@
 <template>
-  <div class="toast" :class="{ show: toast.visible }">{{ toast.message }}</div>
+  <div role="status" class="toast" :class="{ show: toast.visible }">{{ toast.message }}</div>
 </template>
 
 <script setup>

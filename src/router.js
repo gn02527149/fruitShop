@@ -10,7 +10,9 @@ const router = createRouter({
     { path: '/cart', component: CartView, meta: { title: '購物車 — 鮮果市集' } },
     { path: '/admin', component: AdminView, meta: { title: '後台管理 — 鮮果市集' } },
   ],
-  scrollBehavior() {
+  scrollBehavior(to, _from, savedPosition) {
+    if (savedPosition) return savedPosition;
+    if (to.hash) return { el: to.hash, top: 83 };
     return { top: 0 };
   },
 });
